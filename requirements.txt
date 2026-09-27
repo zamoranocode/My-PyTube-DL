@@ -1,0 +1,14 @@
+# Dependencias de Python de My PyTube-DL
+#
+# yt_gui.py solo importa modulos de la libreria estandar mas customtkinter.
+# El resto son binarios externos, ver el README:
+#   - ffmpeg  (paquete del sistema)  -> fusionar video+audio
+#   - deno    (opcional)             -> runtime JS que yt-dlp usa para YouTube
+
+customtkinter>=6.0.0
+yt-dlp
+
+# Para compilar a .exe hace falta PyInstaller, pero build_windows.bat ya lo
+# instala por su cuenta en su propio entorno (.venv-build), asi que aqui no
+# se incluye para no peso a quien solo quiera usar la app.
+#   pip install pyinstaller

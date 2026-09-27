@@ -1,0 +1,41 @@
+# Entornos virtuales
+.venv/
+.venv*/
+venv/
+env/
+
+# PyInstaller (build_windows.bat los regenera; --clean borra la cache)
+build/
+dist/
+*.spec
+
+# Bytecode de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Configuracion local de la app (si alguien la deja aqui por error;
+# la app la escribe en ~/.config/yt-dlp-gui/config.json)
+config.json
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# Logs de sesion de desarrollo (contienen rutas locales, no son codigo)
+session-*.md
+session_*.md
+
+# Prototipo CLI en desuso. La aplicacion real es yt_gui.py.
+yt.py
+
+# Los iconos que se usan son icono-app.ico / icono-app.png.
+# app.ico y app.png son copias byte a byte que quedaron sin usar.
+app.ico
+app.png
