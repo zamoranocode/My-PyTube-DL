@@ -295,6 +295,114 @@ def find_cookie_browsers():
     return {"Ninguno": None, **dict(sorted(found.items()))}
 
 
+MENU_BG = "#2b2b2b"
+MENU_BORDER = "#454545"
+MENU_FG = "#e6e6e6"
+MENU_HOVER = "#3d3d3d"
+MENU_DISABLED = "#7f7f7f"
+
+
+class DarkMenu(ctk.CTkToplevel):
+    """Menú contextual con el tema oscuro de la app.
+
+    tk.Menu usa los colores del sistema y rompía el aspecto, así que se
+    reemplaza por una ventana sin marco con botones de customtkinter.
+
+    `items` es una lista de tuplas (etiqueta, comando, habilitada) o None para
+    un separador. `habilitada` es un booleano o un callable sin argumentos que
+    se evalúa cada vez que se abre el menú, para poder activar o desactivar
+    "Cortar"/"Copiar" según haya selección.
+    """
+
+    ITEM_HEIGHT = 30
+    PADDING = 6
+
+    def __init__(self, master, items):
+        super().__init__(master)
+        self.withdraw()
+        self.overrideredirect(True)
+        self.resizable(False, False)
+        try:
+            self.attributes("-topmost", True)
+        except Exception:
+            pass
+
+        self._closed = False
+        self._items = items
+        self._buttons = {}
+
+        outer = ctk.CTkFrame(self, fg_color="transparent")
+        outer.pack(fill="both", expand=True)
+        panel = ctk.CTkFrame(
+            outer, fg_color=MENU_BG, corner_radius=8, border_width=1, border_color=MENU_BORDER
+        )
+        panel.pack(fill="both", expand=True, padx=2, pady=2)
+
+        for item in items:
+            if item is None:
+                ctk.CTkFrame(panel, height=1, fg_color="#4d4d4d").pack(
+                    fill="x", padx=10, pady=4
+                )
+                continue
+            label, command, enabled = item
+            btn = ctk.CTkButton(
+                panel, text=label, command=self._wrap(command), height=self.ITEM_HEIGHT,
+                width=190, fg_color="transparent", hover_color=MENU_HOVER,
+                text_color=MENU_FG, text_color_disabled=MENU_DISABLED, anchor="w",
+                corner_radius=6,
+            )
+            btn.pack(fill="x", padx=6, pady=1)
+            self._buttons[label] = (btn, enabled)
+
+        self.bind("<Escape>", lambda e: self.close())
+        # El grab envía aquí los clics que caen fuera del panel; cualquier otro
+        # clic debe cerrar el menú para no bloquear la ventana principal.
+        self.bind("<Button-1>", lambda e: self.close())
+        self.bind("<FocusOut>", lambda e: self.close())
+
+    def _wrap(self, command):
+        def run():
+            self.close()
+            if command:
+                command()
+
+        return run
+
+    def _refresh_states(self):
+        for label, (btn, enabled) in self._buttons.items():
+            state = bool(enabled() if callable(enabled) else enabled)
+            btn.configure(state="normal" if state else "disabled")
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self.grab_release()
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
+
+    def popup_at(self, x, y):
+        self.update_idletasks()
+        self._refresh_states()
+        w = self.winfo_reqwidth()
+        h = self.winfo_reqheight()
+        x = max(self.PADDING, min(int(x), self.winfo_screenwidth() - w - self.PADDING))
+        y = max(self.PADDING, min(int(y), self.winfo_screenheight() - h - self.PADDING))
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.deiconify()
+        self.lift()
+        try:
+            self.grab_set()
+        except Exception:
+            pass
+        self.focus_force()
+
+
 class YTDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -538,7 +646,7 @@ class YTDownloaderApp(ctk.CTk):
             target = inner
         else:
             target = widget
-        menu = tk.Menu(widget, tearoff=0)
+
         state = {"entry": target}
 
         def entry():
@@ -598,20 +706,26 @@ class YTDownloaderApp(ctk.CTk):
             if ent is not None:
                 ent.selection_range(0, "end")
 
-        menu.add_command(label="Cortar", command=do_cut)
-        menu.add_command(label="Copiar", command=do_copy)
-        menu.add_command(label="Pegar", command=do_paste)
-        menu.add_separator()
-        menu.add_command(label="Seleccionar todo", command=do_select_all)
+        def ent_has_selection():
+            ent = entry()
+            return bool(ent is not None and ent.selection_present())
+
+        def ent_has_clipboard():
+            return bool(get_clipboard())
+
+        menu_items = (
+            ("Cortar", do_cut, ent_has_selection),
+            ("Copiar", do_copy, ent_has_selection),
+            ("Pegar", do_paste, ent_has_clipboard),
+            None,
+            ("Seleccionar todo", do_select_all, True),
+        )
 
         def popup(event):
             try:
                 ent = state["entry"]
                 if ent.focus_get() is not ent:
                     ent.focus_set()
-                selected = "normal" if ent.selection_present() else "disabled"
-                menu.entryconfigure("Cortar", state=selected)
-                menu.entryconfigure("Copiar", state=selected)
                 # x_root/y_root son atributos del Event (coordenadas de pantalla);
                 # el widget no los tiene, para eso esta winfo_rootx/winfo_rooty.
                 x = getattr(event, "x_root", None)
@@ -619,10 +733,8 @@ class YTDownloaderApp(ctk.CTk):
                 if x is None or y is None:
                     x = ent.winfo_rootx() + getattr(event, "x", 0)
                     y = ent.winfo_rooty() + getattr(event, "y", 0)
-                try:
-                    menu.tk_popup(x, y)
-                finally:
-                    menu.grab_release()
+                menu = DarkMenu(self, menu_items)
+                menu.popup_at(x, y)
             except tk.TclError as exc:
                 messagebox.showerror("Menú", f"No se pudo abrir el menú:\n{exc}")
 
