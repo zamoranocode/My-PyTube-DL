@@ -6,22 +6,35 @@ velocidad y el tiempo estimado en la propia ventana.
 
 ![customtkinter](https://img.shields.io/badge/GUI-customtkinter-24a148) ![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![Licencia](https://img.shields.io/badge/licencia-MIT-green)
 
+![Ventana principal de My PyTube-DL](Screenshot-My-PyTube-DL.png)
+
 ## Características
 
 - Descarga de un vídeo o de una playlist completa.
-- Elección de calidad y opción de extraer solo el audio.
+- Elección de calidad (720p, 1080p, 4K, la mejor disponible) o solo el audio
+  en MP3.
 - **Descargar solo una parte**: delimitas el inicio y el final con *Desde* y
   *Hasta*.
 - Subtítulos en español o inglés (`--write-subs`), en `.srt` o el mejor formato
   disponible.
 - Guardar la miniatura (`--write-thumbnail`).
 - Sobrescribir el archivo si ya existe (`--force-overwrites`).
-- Cookies del navegador (Firefox, Chrome, Edge…) para vídeos con restricción de
-  edad o que exigen sesión iniciada.
-- Progreso con porcentaje, velocidad y ETA, y registro de la descarga.
+- Cookies del navegador (Firefox, Google Chrome, Chromium, Edge, Opera, Vivaldi,
+  Brave y Zen Browser) para vídeos con restricción de edad o que exigen sesión
+  iniciada. El desplegable solo muestra los navegadores que tienen una base de
+  cookies real en el equipo, así que nunca ofrece uno que vaya a fallar.
+- Progreso con porcentaje, velocidad y ETA, y registro de la descarga en una
+  consola verde sobre negro.
 - Botón para **actualizar yt-dlp** sin tocar la terminal.
+- Al abrir, comprueba si **yt-dlp** y **Deno** están al día. El color del pie
+  dice el estado: **verde** al día, **rojo** desactualizado o ausente, y
+  **amarillo** si no se pudo verificar (sin red). Si algo está desactualizado
+  aparece su botón para actualizarlo, con un popup de confirmación.
 - Abrir el último archivo descargado con un clic.
-- Menú contextual en el campo de URL: cortar, copiar, pegar y seleccionar todo.
+- Menú contextual en el campo de URL: cortar, copiar, pegar y seleccionar todo,
+  con el tema oscuro de la aplicación.
+- Selector de carpeta propio, también en tema oscuro, en lugar del diálogo del
+  sistema.
 
 ## Requisitos
 
@@ -71,7 +84,7 @@ dependencias de `requirements.txt`.
 ```
 
 ```bat
-launcher.bat           # Windows
+launcher_win.bat       # Windows
 ```
 
 Los dos lanzadores eligen el intérprete por este orden: el `.exe` ya compilado
@@ -82,7 +95,7 @@ del sistema. Además comprueban que falte `customtkinter`, avisan si `yt-dlp` o
 También puedes arrancarla directamente:
 
 ```bash
-.venv/bin/python yt_gui.py
+.venv/bin/python My-PyTube-DL.py
 ```
 
 ## Compilar a .exe (Windows)
@@ -113,7 +126,7 @@ necesita apuntar al XWayland. `launcher.sh` lo detecta solo, pero si lo ejecutas
 a mano:
 
 ```bash
-DISPLAY=:1 .venv/bin/python yt_gui.py
+DISPLAY=:1 .venv/bin/python My-PyTube-DL.py
 ```
 
 En niri, comprueba que XWayland esté activo con `xwayland enable`. Sin ningún
@@ -132,8 +145,21 @@ añade esa ruta.
 
 ### La descarga falla en vídeos con restricción de edad
 
-Elige tu navegador en *Cookies del navegador*. Requiere que ese navegador esté
-abierto con la sesión iniciada.
+Si el error es `Sorry, this content is age-restricted`, casi nunca es la
+restricción en sí: es que YouTube no resolvió el reto de JavaScript y responde
+con ese mensaje genérico. La app ya pasa `--remote-components ejs:github` para
+que yt-dlp descargue el solver, así que comprueba en este orden:
+
+1. Que **Deno** esté instalado y localizable (`deno --version`). La app añade
+   `~/.deno/bin` al `PATH` del proceso, pero si no es ese el problema,
+   instálalo: `curl -fsSL https://deno.land/install.sh | sh`.
+2. Que las **cookies del navegador** estén actualizadas: elige tu navegador y
+   déjalo abierto con la sesión iniciada en una cuenta verificada de edad.
+3. Que **yt-dlp** esté al día (botón *Actualizar* en la app).
+
+Los avisos `Signature solving failed` / `n challenge solving failed` /
+`GVS PO Token` que aparecen en el registro son ruido: el solver ya ha resuelto
+el reto y la descarga va a funcionar igualmente.
 
 ### Faltan vídeos en una playlist
 
@@ -144,13 +170,14 @@ actualiza yt-dlp desde el botón de la app.
 
 | Fichero | Función |
 |---|---|
-| `yt_gui.py` | toda la aplicación |
-| `launcher.sh` / `launcher.bat` | lanzadores para Linux y Windows |
+| `My-PyTube-DL.py` | toda la aplicación |
+| `launcher.sh` / `launcher_win.bat` | lanzadores para Linux y Windows |
 | `setup_linux.sh` | instalación en Linux |
 | `setup_windows.bat` / `setup_windows.ps1` | instalación en Windows |
 | `build_windows.bat` | empaquetado a `.exe` con PyInstaller |
 | `requirements.txt` | dependencias de Python |
 | `icono-app.ico` / `icono-app.png` | iconos del ejecutable y de la ventana |
+| `Screenshot-My-PyTube-DL.png` | captura mostrada al principio de este README |
 
 La configuración se guarda en `~/.config/yt-dlp-gui/config.json`, fuera del
 repositorio.
