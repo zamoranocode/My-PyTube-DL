@@ -321,7 +321,21 @@ MENU_HOVER = "#3d3d3d"
 MENU_DISABLED = "#7f7f7f"
 
 
-class DarkMenu(ctk.CTkToplevel):
+class _UnmanagedToplevel(ctk.CTkToplevel):
+    """CTkToplevel sin la manipulación de la barra de título de Windows.
+
+    customtkinter, al construir un Toplevel en Windows, lo esconde con withdraw()
+    y lo vuelve a mostrar 5 ms después para que el cambio de color de la barra
+    se aplique. Esa coreografía se lleva por delante los overrides de withdraw()
+    posteriores: una ventana sin marco, como este menú, que se posiciona y
+    muestra en el mismo ciclo de eventos, se queda invisible. Desactivando la
+    manipulación desaparece el problema entero.
+    """
+
+    _deactivate_windows_window_header_manipulation = True
+
+
+class DarkMenu(_UnmanagedToplevel):
     """Menú contextual con el tema oscuro de la app.
 
     tk.Menu usa los colores del sistema y rompía el aspecto, así que se
@@ -838,13 +852,22 @@ class YTDownloaderApp(ctk.CTk):
             ent = entry()
             if ent is None:
                 return None
+            # clipboard_get() no lanza TclError cuando la selección CLIPBOARD
+            # tiene dueño pero está vacía: devuelve "" y se acaba ahí, sin llegar
+            # a PRIMARY. En Linux la URL normalmente se copia con Ctrl+C, pero
+            # si el navegador sólo es dueño de CLIPBOARD y el texto está
+            # seleccionado con el ratón (PRIMARY), "Pegar" no hacía nada.
             try:
-                return ent.clipboard_get()
+                text = ent.clipboard_get()
+                if text:
+                    return text
             except tk.TclError:
                 pass
             if sys.platform.startswith("linux"):
                 try:
-                    return ent.selection_get(selection="PRIMARY")
+                    text = ent.selection_get(selection="PRIMARY")
+                    if text:
+                        return text
                 except tk.TclError:
                     pass
             return None
@@ -917,11 +940,17 @@ class YTDownloaderApp(ctk.CTk):
                     y = ent.winfo_rooty() + getattr(event, "y", 0)
                 menu = DarkMenu(self, menu_items)
                 menu.popup_at(x, y)
-            except tk.TclError as exc:
+            except Exception as exc:
+                # Se captura cualquier excepción, no solo TclError: en el .exe de
+                # Windows no hay consola donde ver el traceback, así que sin este
+                # aviso el fallo sería completamente silencioso.
                 messagebox.showerror("Menú", f"No se pudo abrir el menú:\n{exc}")
 
-        target.bind("<Button-3>", popup)
-        target.bind("<Control-Button-1>", popup)
+        # El clic puede caer sobre el marco de CTkEntry o sobre el Entry interno,
+        # según la plataforma y el punto exacto, así que se enlaza en los dos.
+        for w in ({id(target): target, id(widget): widget}).values():
+            w.bind("<Button-3>", popup)
+            w.bind("<Control-Button-1>", popup)
 
     def _center_window(self):
         self.update_idletasks()
