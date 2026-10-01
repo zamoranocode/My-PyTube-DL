@@ -356,17 +356,16 @@ class FolderPicker(ctk.CTkToplevel):
         ctk.CTkButton(path_row, text="Ir", width=70, height=32,
                       command=lambda: self._go(self.path_var.get())).pack(side="left", padx=(8, 0))
 
-        quick = ctk.CTkFrame(self, fg_color="transparent")
-        quick.pack(fill="x", padx=18, pady=(10, 0))
+        # Inicio y Subir van en la misma fila, y el indicador de ruta actual a su
+        # derecha. Estaban en dos frames apilados y quedaban uno encima del otro.
+        tools = ctk.CTkFrame(self, fg_color="transparent")
+        tools.pack(fill="x", padx=18, pady=(12, 0))
         for label, path in self.QUICK_DIRS:
             ctk.CTkButton(
-                quick, text=label, height=28, fg_color="transparent", border_width=1,
+                tools, text=label, height=30, fg_color="transparent", border_width=1,
                 border_color=MENU_BORDER, text_color=MENU_FG, hover_color=MENU_HOVER,
                 command=lambda p=path: self._go(p),
             ).pack(side="left", padx=(0, 6))
-
-        tools = ctk.CTkFrame(self, fg_color="transparent")
-        tools.pack(fill="x", padx=18, pady=(12, 0))
         self.up_btn = ctk.CTkButton(tools, text="⬆ Subir", width=96, height=30,
                                     fg_color="transparent", border_width=1,
                                     border_color=MENU_BORDER, text_color=MENU_FG,
