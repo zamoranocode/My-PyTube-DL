@@ -11,7 +11,7 @@ import threading
 import urllib.request
 from pathlib import Path
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import messagebox
 
 import customtkinter as ctk
 
@@ -401,6 +401,141 @@ class DarkMenu(ctk.CTkToplevel):
         except Exception:
             pass
         self.focus_force()
+
+
+class FolderPicker(ctk.CTkToplevel):
+    """Selector de carpetas con el tema oscuro de la app.
+
+    El diálogo de archivos de Tk usa el tema del sistema, que con el tema claro
+    de GTK rompe la coherencia visual de la aplicación.
+    """
+
+    QUICK_DIRS = (
+        ("🏠 Inicio", "~"),
+        ("🖥️ Escritorio", "~/Escritorio"),
+        ("⬇️ Descargas", "~/Descargas"),
+        ("🎬 Vídeos", "~/Vídeos"),
+    )
+
+    def __init__(self, master, initial):
+        super().__init__(master)
+        self.title("Seleccionar carpeta de descarga")
+        self.geometry("640x540")
+        self.minsize(560, 460)
+        self.transient(master)
+        self.resizable(True, True)
+        self._result = None
+
+        self.path_var = ctk.StringVar(value=initial)
+
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=18, pady=(16, 0))
+        ctk.CTkLabel(header, text="📁 Carpeta de descarga", anchor="w",
+                     font=ctk.CTkFont(size=17, weight="bold")).pack(fill="x")
+
+        path_row = ctk.CTkFrame(self, fg_color="transparent")
+        path_row.pack(fill="x", padx=18, pady=(12, 0))
+        entry = ctk.CTkEntry(path_row, textvariable=self.path_var, height=32)
+        entry.pack(side="left", fill="x", expand=True)
+        entry.bind("<Return>", lambda e: self._go(self.path_var.get()))
+        ctk.CTkButton(path_row, text="Ir", width=70, height=32,
+                      command=lambda: self._go(self.path_var.get())).pack(side="left", padx=(8, 0))
+
+        quick = ctk.CTkFrame(self, fg_color="transparent")
+        quick.pack(fill="x", padx=18, pady=(10, 0))
+        for label, path in self.QUICK_DIRS:
+            ctk.CTkButton(
+                quick, text=label, height=28, fg_color="transparent", border_width=1,
+                border_color=MENU_BORDER, text_color=MENU_FG, hover_color=MENU_HOVER,
+                command=lambda p=path: self._go(p),
+            ).pack(side="left", padx=(0, 6))
+
+        tools = ctk.CTkFrame(self, fg_color="transparent")
+        tools.pack(fill="x", padx=18, pady=(12, 0))
+        self.up_btn = ctk.CTkButton(tools, text="⬆ Subir", width=96, height=30,
+                                    fg_color="transparent", border_width=1,
+                                    border_color=MENU_BORDER, text_color=MENU_FG,
+                                    hover_color=MENU_HOVER, command=self._go_up)
+        self.up_btn.pack(side="left")
+        self.where = ctk.CTkLabel(tools, text="", anchor="w", text_color=MENU_DISABLED)
+        self.where.pack(side="left", padx=(12, 0))
+
+        self.list_frame = ctk.CTkScrollableFrame(self, fg_color="#2b2b2b", corner_radius=8,
+                                                 border_width=1, border_color=MENU_BORDER)
+        self.list_frame.pack(fill="both", expand=True, padx=18, pady=(8, 0))
+
+        footer = ctk.CTkFrame(self, fg_color="transparent")
+        footer.pack(fill="x", padx=18, pady=16)
+        self.accept_btn = ctk.CTkButton(footer, text="Seleccionar", width=130, height=34,
+                                        command=self._accept)
+        self.accept_btn.pack(side="right")
+        ctk.CTkButton(footer, text="Cancelar", width=110, height=34, fg_color="transparent",
+                      border_width=1, border_color=MENU_BORDER, text_color=MENU_FG,
+                      hover_color=MENU_HOVER, command=self.destroy).pack(side="right", padx=(0, 8))
+
+        self.bind("<Escape>", lambda e: self.destroy())
+        self._go(initial)
+
+    @staticmethod
+    def _resolve(path):
+        path = os.path.expanduser(os.path.expandvars((path or "").strip()))
+        if not path:
+            path = str(Path.home())
+        path = os.path.abspath(path)
+        while not os.path.isdir(path):
+            parent = os.path.dirname(path)
+            if parent == path:
+                return str(Path.home())
+            path = parent
+        return path
+
+    def _go(self, path):
+        resolved = self._resolve(path)
+        self.path_var.set(resolved)
+        self._refresh(resolved)
+
+    def _go_up(self):
+        self._go(os.path.dirname(self.path_var.get()))
+
+    def _refresh(self, path):
+        for child in self.list_frame.winfo_children():
+            child.destroy()
+
+        try:
+            names = sorted(
+                entry.name for entry in os.scandir(path)
+                if entry.is_dir(follow_symlinks=False) and not entry.name.startswith(".")
+            )
+        except OSError:
+            names = []
+
+        if not names:
+            ctk.CTkLabel(self.list_frame, text="(sin subcarpetas)", anchor="w",
+                         text_color=MENU_DISABLED).pack(fill="x", padx=10, pady=10)
+
+        for name in names:
+            ctk.CTkButton(
+                self.list_frame, text=name, anchor="w", height=30, fg_color="transparent",
+                hover_color=MENU_HOVER, text_color=MENU_FG,
+                command=lambda n=name: self._go(os.path.join(path, n)),
+            ).pack(fill="x", padx=4, pady=1)
+
+        parent = os.path.dirname(path)
+        self.up_btn.configure(state="normal" if parent != path else "disabled")
+        self.where.configure(text=path if len(path) <= 60 else "…" + path[-58:])
+        self.accept_btn.configure(state="normal" if os.path.isdir(path) else "disabled")
+
+    def _accept(self):
+        path = self.path_var.get()
+        if path and os.path.isdir(path):
+            self._result = path
+            self.destroy()
+
+    def show(self):
+        self.grab_set()
+        self.focus_force()
+        self.wait_window()
+        return self._result
 
 
 class YTDownloaderApp(ctk.CTk):
@@ -822,7 +957,7 @@ class YTDownloaderApp(ctk.CTk):
 
     def choose_dir(self):
         initial = self.dir_var.get().strip() or str(default_dir())
-        chosen = filedialog.askdirectory(title="Carpeta de descarga", initialdir=initial)
+        chosen = FolderPicker(self, initial).show()
         if chosen:
             self.dir_var.set(chosen)
             self.save_config()
