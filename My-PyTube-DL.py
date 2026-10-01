@@ -465,9 +465,15 @@ class YTDownloaderApp(ctk.CTk):
         log_frame = ctk.CTkFrame(container, fg_color="transparent")
         log_frame.pack(fill="both", expand=True, pady=(12, 0))
         ctk.CTkLabel(log_frame, text="Registro", font=ctk.CTkFont(size=13)).pack(anchor="w")
-        self.log_box = ctk.CTkTextbox(log_frame, height=110, wrap="word", font=ctk.CTkFont(family="monospace", size=12))
+        self.log_box = ctk.CTkTextbox(
+            log_frame, height=110, wrap="word",
+            font=ctk.CTkFont(family="monospace", size=12),
+            fg_color="#000000", text_color="#00FF00",
+            border_width=1, border_color="#2b2b2b", corner_radius=4,
+        )
         self.log_box.pack(fill="both", expand=True, pady=(6, 0))
         self.log_box.configure(state="disabled")
+        self.log_box._textbox.tag_configure("sel", foreground="#00FF00", background="#1f4d1f")
 
         ctk.CTkLabel(
             container, textvariable=self.status_var, wraplength=660, justify="left",
