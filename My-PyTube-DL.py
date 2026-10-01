@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import glob
 import json
 import os
 import queue
@@ -39,15 +40,6 @@ QUALITY_PRESETS = {
         "container": "mp3",
         "audio": True,
     },
-}
-
-COOKIE_BROWSERS = {
-    "Ninguno": None,
-    "Firefox": "firefox",
-    "Brave": "brave",
-    "Brave (Origin)": "brave-origin",
-    "Zen Browser": "zen",
-    "Chromium": "chromium",
 }
 
 PROGRESS_PREFIX = "@@YTDLP_PROGRESS@@"
@@ -162,6 +154,139 @@ def find_ytdlp():
     return None
 
 
+# Perfiles de navegador donde yt-dlp puede buscar la base de cookies. Los
+# navegadores ausentes de esta tabla no se ofrecen, porque cualquier otro
+# nombre hace fallar la extracción con "unsupported browser specified for
+# cookies".
+#
+# "key" es la clave que yt-dlp acepta. Los navegadores que yt-dlp no conoce
+# (Brave Origin Beta, Zen) o cuya carpeta de perfiles no es la que busca por su
+# cuenta se resuelven siempre con la sintaxis "clave:ruta_absoluta", que
+# yt-dlp admite cuando la parte tras ":" es una ruta.
+#
+# "home" marca las rutas relativas a la carpeta de configuración del sistema;
+# las de "~" se expanden directamente desde el directorio personal.
+COOKIE_BROWSER_PROFILES = {
+    "Brave": {
+        "key": "brave",
+        "home": {
+            "linux": ["BraveSoftware/Brave-Browser"],
+            "darwin": ["BraveSoftware/Brave-Browser", "BraveSoftware/Brave-Browser-Beta",
+                       "BraveSoftware/Brave-Browser-Nightly"],
+            "win32": [r"BraveSoftware\Brave-Browser\User Data"],
+        },
+    },
+    "Brave (Origin Beta)": {
+        "key": "brave",
+        "home": {"linux": ["BraveSoftware/Brave-Origin-Beta"]},
+    },
+    "Chromium": {
+        "key": "chromium",
+        "home": {
+            "linux": ["chromium"],
+            "darwin": ["Chromium"],
+            "win32": [r"Chromium\User Data"],
+        },
+    },
+    "Edge": {
+        "key": "edge",
+        "home": {
+            "linux": ["microsoft-edge", "microsoft-edge-beta", "microsoft-edge-dev"],
+            "darwin": ["Microsoft Edge", "Microsoft Edge Beta"],
+            "win32": [r"Microsoft\Edge\User Data"],
+        },
+    },
+    "Firefox": {
+        "key": "firefox",
+        "home": {"linux": ["mozilla/firefox"], "darwin": [], "win32": []},
+        "~": [".mozilla/firefox",
+              ".var/app/org.mozilla.firefox/config/mozilla/firefox",
+              ".var/app/org.mozilla.firefox/.mozilla/firefox",
+              "snap/firefox/common/.mozilla/firefox",
+              "Library/Application Support/Firefox/Profiles"],
+    },
+    "Google Chrome": {
+        "key": "chrome",
+        "home": {
+            "linux": ["google-chrome", "google-chrome-beta", "google-chrome-unstable"],
+            "darwin": ["Google/Chrome", "Google/Chrome Beta", "Google/Chrome Canary"],
+            "win32": [r"Google\Chrome\User Data"],
+        },
+    },
+    "Opera": {
+        "key": "opera",
+        "home": {
+            "linux": ["opera"],
+            "darwin": ["com.operasoftware.Opera", "com.operasoftware.OperaNext"],
+            "win32": [r"Opera Software\Opera Stable"],
+        },
+    },
+    "Vivaldi": {
+        "key": "vivaldi",
+        "home": {
+            "linux": ["vivaldi"],
+            "darwin": ["Vivaldi"],
+            "win32": [r"Vivaldi\User Data"],
+        },
+    },
+    "Zen Browser": {
+        # Derivado de Firefox con su propia carpeta de perfiles: yt-dlp no lo
+        # conoce, así que se le pasa la ruta explícita con la clave de firefox.
+        "key": "firefox",
+        "home": {"linux": [], "darwin": [], "win32": []},
+        "~": [".zen"],
+    },
+}
+
+_COOKIE_DB_NAMES = ("Cookies", "cookies.sqlite")
+
+
+def _cookie_home():
+    if sys.platform == "win32":
+        return os.path.expandvars("%LOCALAPPDATA%")
+    if sys.platform == "darwin":
+        return str(Path.home() / "Library" / "Application Support")
+    return os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+
+
+def _has_cookie_db(root):
+    """True si hay una base de cookies de perfil dentro de `root`."""
+    root = os.path.expanduser(root)
+    if not os.path.isdir(root):
+        return False
+    for name in _COOKIE_DB_NAMES:
+        for depth in ("", "*/", "*/*/"):
+            pattern = os.path.join(root, depth, name)
+            try:
+                if glob.glob(pattern):
+                    return True
+            except OSError:
+                continue
+    return False
+
+
+def find_cookie_browsers():
+    """Navegadores con base de cookies real en este equipo.
+
+    Devuelve {nombre visible: valor para --cookies-from-browser}, con "Ninguno"
+    primero y el resto en orden alfabético. Se omiten los navegadores
+    instalados pero nunca utilizados, porque en ellos la extracción falla con
+    "could not find ... cookies database".
+    """
+    found = {}
+    for name, spec in COOKIE_BROWSER_PROFILES.items():
+        key = spec["key"]
+        candidates = [os.path.join(_cookie_home(), r)
+                      for r in spec["home"].get(sys.platform, [])]
+        candidates += [os.path.expanduser("~/" + r) for r in spec.get("~", ())]
+        for root in candidates:
+            if not _has_cookie_db(root):
+                continue
+            found[name] = f"{key}:{os.path.abspath(root)}"
+            break
+    return {"Ninguno": None, **dict(sorted(found.items()))}
+
+
 class YTDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -172,6 +297,7 @@ class YTDownloaderApp(ctk.CTk):
 
         self.ui_queue = queue.Queue()
         self.config = self.load_config()
+        self.cookie_browsers = find_cookie_browsers()
 
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
@@ -182,7 +308,7 @@ class YTDownloaderApp(ctk.CTk):
             quality = "1080p (MKV)"
         self.quality_var = ctk.StringVar(value=quality)
         cookies = self.config.get("cookies")
-        if cookies not in COOKIE_BROWSERS:
+        if cookies not in self.cookie_browsers:
             cookies = "Ninguno"
         self.cookies_var = ctk.StringVar(value=cookies)
         self.dir_var = ctk.StringVar(value=self.config.get("download_dir", str(default_dir())))
@@ -246,7 +372,7 @@ class YTDownloaderApp(ctk.CTk):
         self.quality_menu.grid(row=0, column=1, sticky="w")
         ctk.CTkLabel(row1, text="Cookies del navegador", font=ctk.CTkFont(size=13)).grid(row=0, column=2, sticky="w", padx=(24, 8))
         self.cookies_menu = ctk.CTkOptionMenu(
-            row1, values=list(COOKIE_BROWSERS), variable=self.cookies_var, width=180
+            row1, values=list(self.cookie_browsers), variable=self.cookies_var, width=180
         )
         self.cookies_menu.grid(row=0, column=3, sticky="w")
         row1.grid_columnconfigure(1, weight=0)
@@ -619,7 +745,7 @@ class YTDownloaderApp(ctk.CTk):
             if start and end:
                 cmd += ["--download-sections", f"*{start}-{end}"]
 
-        browser = COOKIE_BROWSERS[self.cookies_var.get()]
+        browser = self.cookie_browsers[self.cookies_var.get()]
         if browser:
             cmd += ["--cookies-from-browser", browser]
 
