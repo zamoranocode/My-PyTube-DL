@@ -1,6 +1,6 @@
 # Dependencias de Python de My PyTube-DL
 #
-# yt_gui.py solo importa modulos de la libreria estandar mas customtkinter.
+# My-PyTube-DL.py solo importa modulos de la libreria estandar mas customtkinter.
 # El resto son binarios externos, ver el README:
 #   - ffmpeg  (paquete del sistema)  -> fusionar video+audio
 #   - deno    (opcional)             -> runtime JS que yt-dlp usa para YouTube

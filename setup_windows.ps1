@@ -29,11 +29,11 @@ function Install-Winget {
 }
 
 Write-Host "======================================================" -ForegroundColor Cyan
-Write-Host "  My PyTube-DL - Instalacion de dependencias " -ForegroundColor Cyan
+Write-Host "  My PyTube-DL - Instalacion de dependencias "          -ForegroundColor Cyan
 Write-Host "======================================================" -ForegroundColor Cyan
 
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-    throw "winget no esta� disponible. Usa Windows 10 21H2+ / Windows 11 o instala el App Installer."
+    throw "winget no esta disponible. Usa Windows 10 21H2+ / Windows 11 o instala el App Installer."
 }
 
 # --- Python ---------------------------------------------------------------
@@ -52,7 +52,7 @@ if (-not $pyPath -or -not (Test-Path $pyPath)) {
 }
 Write-Host "[=] Python: $($pyPath)" -ForegroundColor Cyan
 
-# Python no a�ade su carpeta a PATH en la sesion actual: preparala manualmente.
+# Python no añade su carpeta a PATH en la sesion actual: preparala manualmente.
 $pyDir = Split-Path $pyPath
 $env:Path = $pyDir + ";" + $env:Path
 
@@ -91,5 +91,5 @@ Write-Host "================ RESUMEN ================" -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "[OK] Instalacion completa." -ForegroundColor Green
-Write-Host "EJECUTA:  launcher.bat" -ForegroundColor Green
+Write-Host "EJECUTA:  launcher_win.bat" -ForegroundColor Green
 Write-Host "(Si algun comando no se reconoce, cierra y abre el terminal para refrescar el PATH.)" -ForegroundColor Yellow

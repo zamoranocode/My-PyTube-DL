@@ -3,7 +3,7 @@ setlocal
 chcp 65001 >nul
 cd /d "%~dp0"
 
-set "APP=%~dp0yt_gui.py"
+set "APP=%~dp0My-PyTube-DL.py"
 if not exist "%APP%" goto :noapp
 
 REM --- Prioridad: .exe compilado > .venv > Python del sistema ---------------
@@ -57,7 +57,7 @@ exit /b 1
 
 :noapp
 echo.
-echo  No se encuentra yt_gui.py en %~dp0
+echo  No se encuentra My-PyTube-DL.py en %~dp0
 pause
 exit /b 1
 

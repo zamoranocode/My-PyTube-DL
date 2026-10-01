@@ -4,7 +4,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ===============================================
-echo   YT Downloader - Instalacion de dependencias
+echo   My PyTube-DL - Instalacion de dependencias
 echo ===============================================
 echo.
 
@@ -24,4 +24,4 @@ if errorlevel 1 (
 )
 
 echo.
-pause
+pause

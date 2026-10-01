@@ -35,8 +35,8 @@ if ! "$PY" -c "import customtkinter" 2>/dev/null; then
     exit 1
 fi
 
-if [ ! -f yt_gui.py ]; then
-    fail "No se encuentra yt_gui.py en $(pwd)"
+if [ ! -f My-PyTube-DL.py ]; then
+    fail "No se encuentra My-PyTube-DL.py en $(pwd)"
     exit 1
 fi
 
@@ -91,4 +91,4 @@ if [ -z "${DISPLAY:-}" ] || ! probe_display "${DISPLAY:-}"; then
 fi
 
 info "Iniciando My PyTube-DL..."
-exec "$PY" yt_gui.py
+exec "$PY" My-PyTube-DL.py

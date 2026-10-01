@@ -25,7 +25,7 @@ echo [3/3] Compilando My-PyTube-DL.exe...
     --add-data "icono-app.ico;." ^
     --add-data "icono-app.png;." ^
     --collect-all customtkinter ^
-    "yt_gui.py"
+    "My-PyTube-DL.py"
 if errorlevel 1 goto :fail
 
 echo.

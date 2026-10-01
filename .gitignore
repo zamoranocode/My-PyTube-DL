@@ -31,11 +31,3 @@ Thumbs.db
 # Logs de sesion de desarrollo (contienen rutas locales, no son codigo)
 session-*.md
 session_*.md
-
-# Prototipo CLI en desuso. La aplicacion real es yt_gui.py.
-yt.py
-
-# Los iconos que se usan son icono-app.ico / icono-app.png.
-# app.ico y app.png son copias byte a byte que quedaron sin usar.
-app.ico
-app.png
