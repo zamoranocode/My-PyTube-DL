@@ -20,15 +20,23 @@ CONFIG_PATH = Path.home() / ".config" / "yt-dlp-gui" / "config.json"
 YTDLP_GH_API = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
 
 QUALITY_PRESETS = {
+    "720p (MKV)": {
+        "format": "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[height<=720]",
+        "container": "mkv",
+        "audio": False,
+        "height": 720,
+    },
     "1080p (MKV)": {
         "format": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[height<=1080]",
         "container": "mkv",
         "audio": False,
+        "height": 1080,
     },
     "4K / 2160p (MKV)": {
         "format": "bestvideo[height<=2160]+bestaudio/best[height<=2160]",
         "container": "mkv",
         "audio": False,
+        "height": 2160,
     },
     "Mejor calidad (MKV)": {
         "format": "bestvideo+bestaudio/best",
@@ -872,6 +880,28 @@ class YTDownloaderApp(ctk.CTk):
         except Exception as e:
             self.ui_queue.put(("update_result", f"❌ No se pudo actualizar: {e}"))
 
+    def _warn_low_quality(self, path):
+        """YouTube puede no servir la calidad pedida si la sesión está en el
+        experimento de streaming SABR: en ese caso sólo ofrece 360p y el
+        archivo baja por debajo de lo elegido en el desplegable."""
+        target = QUALITY_PRESETS.get(self.quality_var.get(), {}).get("height")
+        m = re.search(r"\[(\d+)p\]", Path(path).name)
+        if not target or not m:
+            return
+        got = int(m.group(1))
+        if got >= target:
+            return
+        browser = self.cookies_var.get()
+        messagebox.showwarning(
+            "Calidad menor de la esperada",
+            f"YouTube sólo ha servido {got}p en lugar de {target}p.\n\n"
+            f"Causa habitual: con las cookies de «{browser}» esa sesión está en el "
+            "experimento de streaming SABR, que sólo publica el formato progresivo "
+            "de 360p. Ningún ajuste de la app puede evitarlo.\n\n"
+            "Prueba con las cookies de otro navegador o quita las cookies: "
+            "los vídeos con restricción de edad ya se resuelven sin ellas.",
+        )
+
     def _poll_queue(self):
         try:
             while True:
@@ -896,6 +926,7 @@ class YTDownloaderApp(ctk.CTk):
                     self.last_file = msg[1]
                     self.open_btn.configure(state="normal")
                     self.status_var.set(f"📂 Archivo: {Path(msg[1]).name}")
+                    self._warn_low_quality(msg[1])
                 elif kind == "done":
                     self.downloading = False
                     self.download_btn.configure(state="normal", text="⬇️  Descargar")
