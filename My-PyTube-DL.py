@@ -899,12 +899,25 @@ class YTDownloaderApp(ctk.CTk):
 
         def do_paste():
             ent = entry()
-            text = get_clipboard()
-            if ent is None or not text:
+            if ent is None:
                 return
-            if ent.selection_present():
-                ent.delete("sel.first", "sel.last")
-            ent.insert("insert", text)
+            try:
+                # Usar el paste nativo de Tk es más robusto entre plataformas y
+                # con otros procesos que tienen el portapapeles. De este modo
+                # evitamos los casos donde clipboard_get devuelve "" o falla.
+                ent.focus_force()
+                if ent.selection_present():
+                    ent.delete("sel.first", "sel.last")
+                ent.event_generate("<<Paste>>")
+            except Exception:
+                # Fallback a la implementación manual en caso de que el paste
+                # nativo falle por algún motivo.
+                text = get_clipboard()
+                if not text:
+                    return
+                if ent.selection_present():
+                    ent.delete("sel.first", "sel.last")
+                ent.insert("insert", text)
 
         def do_select_all():
             ent = entry()
