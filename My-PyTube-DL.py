@@ -147,6 +147,21 @@ def _resource_path(name):
     return Path(__file__).resolve().parent / name
 
 
+def find_ytdlp():
+    p = shutil.which("yt-dlp")
+    if p:
+        return p
+    for cand in (
+        Path(sys.executable).parent / "yt-dlp",
+        Path(sys.executable).parent / "yt-dlp.exe",
+        _resource_path("yt-dlp"),
+        _resource_path("yt-dlp.exe"),
+    ):
+        if cand.exists():
+            return str(cand)
+    return None
+
+
 class YTDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
