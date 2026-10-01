@@ -11,7 +11,7 @@ import threading
 import urllib.request
 from pathlib import Path
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
@@ -330,9 +330,6 @@ class FolderPicker(ctk.CTkToplevel):
 
     QUICK_DIRS = (
         ("🏠 Inicio", "~"),
-        ("🖥️ Escritorio", "~/Escritorio"),
-        ("⬇️ Descargas", "~/Descargas"),
-        ("🎬 Vídeos", "~/Vídeos"),
     )
 
     def __init__(self, master, initial):
@@ -899,10 +896,41 @@ class YTDownloaderApp(ctk.CTk):
 
     def choose_dir(self):
         initial = self.dir_var.get().strip() or str(default_dir())
-        chosen = FolderPicker(self, initial).show()
+        chosen = self._ask_folder(initial)
         if chosen:
             self.dir_var.set(chosen)
             self.save_config()
+
+    def _ask_folder(self, initial):
+        # En Windows se usa el explorador nativo (IFileDialog de Tk 8.6, el mismo
+        # de "Seleccionar carpeta" del Explorador). En Linux, el diálogo de Tk
+        # cae al tema claro de GTK y rompe la coherencia con la app, así que se
+        # sustituye por el FolderPicker propio.
+        if sys.platform == "win32":
+            return filedialog.askdirectory(title="Seleccionar carpeta de descarga",
+                                          initialdir=self._resolve_folder(initial))
+        try:
+            return FolderPicker(self, initial).show()
+        except Exception as exc:
+            # Si el FolderPicker falla, al menos que quede el diálogo del sistema
+            # en vez de no abrir nada.
+            messagebox.showerror("Carpetas", f"No se pudo abrir el selector:\n{exc}")
+            return filedialog.askdirectory(title="Seleccionar carpeta de descarga",
+                                          initialdir=self._resolve_folder(initial))
+
+    @staticmethod
+    def _resolve_folder(path):
+        """Deja la ruta en un directorio existente, subiendo hasta encontrarla."""
+        path = os.path.expanduser(os.path.expandvars((path or "").strip()))
+        if not path:
+            return str(default_dir())
+        path = os.path.abspath(path)
+        while not os.path.isdir(path):
+            parent = os.path.dirname(path)
+            if parent == path:
+                return str(default_dir())
+            path = parent
+        return path
 
     def _build_command(self, url):
         preset = QUALITY_PRESETS[self.quality_var.get()]
