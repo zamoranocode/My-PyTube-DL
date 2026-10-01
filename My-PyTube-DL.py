@@ -587,6 +587,7 @@ class YTDownloaderApp(ctk.CTk):
             "--encoding", "utf-8",
             "--print", f"after_move:{FINAL_PREFIX}%(filepath)s",
             "--no-quiet",
+            "--remote-components", "ejs:github",
             "--progress-template",
             f"download:{PROGRESS_PREFIX}%(progress._percent_str)s|%(progress._eta_str)s|%(progress._speed_str)s",
         ]
