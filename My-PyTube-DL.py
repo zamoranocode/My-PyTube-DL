@@ -18,6 +18,11 @@ import customtkinter as ctk
 APP_NAME = "My PyTube-DL"
 CONFIG_PATH = Path.home() / ".config" / "yt-dlp-gui" / "config.json"
 YTDLP_GH_API = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
+DENO_LATEST_URL = "https://dl.deno.land/release-latest.txt"
+
+OK_COLOR = "#22c55e"
+WARN_COLOR = "#ef4444"
+NEUTRAL_COLOR = "#eab308"
 
 QUALITY_PRESETS = {
     "720p (MKV)": {
@@ -98,6 +103,17 @@ def fetch_latest_version():
         return None
 
 
+def fetch_latest_deno_version():
+    # Deno publica un endpoint propio: más ligero que la API de GitHub y sin
+    # límite de peticiones.
+    try:
+        req = urllib.request.Request(DENO_LATEST_URL, headers={"User-Agent": "yt-dlp-gui/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return normalize_version(r.read().decode("utf-8").strip())
+    except Exception:
+        return None
+
+
 def get_local_version():
     try:
         out = subprocess.run(
@@ -112,15 +128,18 @@ def get_local_version():
 
 
 def find_deno():
-    p = shutil.which("deno")
-    if p:
-        return p
+    # Se prefiere la instalación del usuario aunque no esté en el PATH: suele
+    # ser más nueva que la del sistema y es la única que `deno upgrade` puede
+    # reemplazar sin root.
     for cand in (
         Path.home() / ".deno" / "bin" / "deno",
         Path.home() / ".deno" / "bin" / "deno.exe",
     ):
         if cand.exists():
             return str(cand)
+    p = shutil.which("deno")
+    if p:
+        return p
     return None
 
 
@@ -538,6 +557,28 @@ class FolderPicker(ctk.CTkToplevel):
         return self._result
 
 
+def strip_ansi(text):
+    return re.sub(r"\x1b\[[0-9;]*m", "", text or "")
+
+
+def download_env():
+    env = os.environ.copy()
+    dirs = []
+    deno = find_deno()
+    if deno:
+        dirs.append(str(Path(deno).parent))
+    ytdlp = find_ytdlp()
+    if ytdlp:
+        dirs.append(str(Path(ytdlp).parent))
+    current = env.get("PATH", "")
+    parts = current.split(os.pathsep) if current else []
+    for d in reversed(dirs):
+        if d and d not in parts:
+            parts.insert(0, d)
+    env["PATH"] = os.pathsep.join(parts)
+    return env
+
+
 class YTDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -595,9 +636,15 @@ class YTDownloaderApp(ctk.CTk):
 
         footer = ctk.CTkFrame(container, fg_color="transparent")
         footer.pack(fill="x", side="bottom")
-        ctk.CTkLabel(footer, textvariable=self.version_var, font=ctk.CTkFont(size=12)).pack(side="left")
+        self.ytdlp_label = ctk.CTkLabel(footer, textvariable=self.version_var, font=ctk.CTkFont(size=12))
+        self.ytdlp_label.pack(side="left")
         self.deno_label = ctk.CTkLabel(footer, textvariable=self.deno_var, font=ctk.CTkFont(size=12))
         self.deno_label.pack(side="right")
+        self.deno_update_btn = ctk.CTkButton(
+            footer, text="Actualizar Deno", width=130, height=28,
+            fg_color="transparent", border_width=1, text_color=NEUTRAL_COLOR,
+            hover_color="#3b3b3b", command=self.start_deno_update,
+        )
 
         self.update_btn = ctk.CTkButton(
             footer, text="Actualizar yt-dlp", width=150, height=28, command=self.start_update
@@ -1043,6 +1090,7 @@ class YTDownloaderApp(ctk.CTk):
             proc = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, bufsize=1, encoding="utf-8", errors="replace",
+                env=download_env(),
                 **NO_WINDOW_KWARGS
             )
         except FileNotFoundError:
@@ -1114,7 +1162,8 @@ class YTDownloaderApp(ctk.CTk):
         local = get_local_version()
         latest = fetch_latest_version()
         deno = get_deno_version()
-        self.ui_queue.put(("version_check", local, latest, deno))
+        deno_latest = fetch_latest_deno_version()
+        self.ui_queue.put(("version_check", local, latest, deno, deno_latest))
 
     def _start_update(self):
         self.version_var.set("Actualizando yt-dlp...")
@@ -1125,9 +1174,10 @@ class YTDownloaderApp(ctk.CTk):
         try:
             out = subprocess.run(
                 ["yt-dlp", "-U"], capture_output=True, text=True, timeout=180,
+                env=download_env(),
                 **NO_WINDOW_KWARGS
             )
-            tail = (out.stdout or out.stderr or "").strip().splitlines()
+            tail = strip_ansi((out.stdout or out.stderr or "")).strip().splitlines()
             msg = tail[-1] if tail else "yt-dlp actualizado."
             self.ui_queue.put(("update_result", f"✅ {msg}"))
         except Exception as e:
@@ -1184,25 +1234,62 @@ class YTDownloaderApp(ctk.CTk):
                     self.downloading = False
                     self.download_btn.configure(state="normal", text="⬇️  Descargar")
                 elif kind == "version_check":
-                    _, local, latest, deno = msg
-                    if deno:
-                        self.deno_var.set(f"Deno: {deno}")
-                    else:
-                        self.deno_var.set("Deno: NO detectado")
+                    _, local, latest, deno, deno_latest = msg
+
+                    # yt-dlp
                     if local is None:
                         self.version_var.set("⚠️ yt-dlp NO encontrado en el PATH")
+                        self.ytdlp_label.configure(text_color=WARN_COLOR)
                         self.update_btn.pack(side="left", padx=(10, 0))
                     elif latest is None:
-                        self.version_var.set(f"yt-dlp: {local} (no se pudo verificar en GitHub)")
+                        self.version_var.set(f"yt-dlp: {local} (no se pudo verificar)")
+                        self.ytdlp_label.configure(text_color=NEUTRAL_COLOR)
                     elif is_newer(latest, local):
                         self.version_var.set(f"⚠️ yt-dlp desactualizado: {local} → {latest}")
+                        self.ytdlp_label.configure(text_color=WARN_COLOR)
                         self.update_btn.pack(side="left", padx=(10, 0))
                     else:
                         self.version_var.set(f"✅ yt-dlp: {local}")
+                        self.ytdlp_label.configure(text_color=OK_COLOR)
+
+                    # Deno
+                    if deno is None:
+                        self.deno_var.set("Deno: NO detectado")
+                        self.deno_label.configure(text_color=WARN_COLOR)
+                        self.deno_update_btn.pack_forget()
+                    elif deno_latest is None:
+                        self.deno_var.set(f"Deno: {deno} (no se pudo verificar)")
+                        self.deno_label.configure(text_color=NEUTRAL_COLOR)
+                        self.deno_update_btn.pack_forget()
+                    elif is_newer(deno_latest, deno):
+                        self.deno_var.set(f"⚠️ Deno desactualizado: {deno} → {deno_latest}")
+                        self.deno_label.configure(text_color=WARN_COLOR)
+                        self.deno_update_btn.pack(side="right", padx=(8, 10))
+                    else:
+                        self.deno_var.set(f"✅ Deno: {deno}")
+                        self.deno_label.configure(text_color=OK_COLOR)
+                        self.deno_update_btn.pack_forget()
                 elif kind == "update_result":
                     self.version_var.set(msg[1])
+                    self.ytdlp_label.configure(text_color=WARN_COLOR)
                     self.update_btn.pack_forget()
                     self.update_btn.configure(state="normal", text="Actualizar yt-dlp")
+                    self._version_check_worker()
+                elif kind == "deno_update_result":
+                    _, deno_ok, deno_msg = msg
+                    if deno_ok:
+                        messagebox.showinfo("Deno", f"{deno_msg}\n\nComprobando de nuevo...", parent=self)
+                    else:
+                        messagebox.showerror(
+                            "Deno",
+                            f"{deno_msg}\n\n"
+                            "Si Deno lo instaló tu sistema (por ejemplo /usr/bin/deno), "
+                            "actualízalo con el gestor de paquetes:\n"
+                            "  sudo pacman -Syu   # Arch\n"
+                            "  sudo apt update && sudo apt install --only-upgrade deno   # Debian",
+                            parent=self,
+                        )
+                    self.deno_update_btn.configure(state="normal", text="Actualizar Deno")
                     self._version_check_worker()
         except queue.Empty:
             pass
@@ -1213,6 +1300,55 @@ class YTDownloaderApp(ctk.CTk):
 
     def start_update(self):
         self._start_update()
+
+    def start_deno_update(self):
+        deno = find_deno()
+        if not deno:
+            messagebox.showerror(
+                "Deno",
+                "No se encuentra Deno.\n\nInstálalo con:\n"
+                "  curl -fsSL https://deno.land/install.sh | sh",
+            )
+            return
+
+        ok = messagebox.askyesno(
+            "Actualizar Deno",
+            f"Deno está desactualizado.\n\n"
+            f"¿Quieres actualizarlo ahora?\n\n"
+            f"  ejecutable: {deno}\n"
+            f"  comando   : deno upgrade",
+            parent=self,
+        )
+        if not ok:
+            return
+
+        self.deno_update_btn.configure(state="disabled", text="Actualizando...")
+        self.deno_var.set("Deno: actualizando...")
+        threading.Thread(target=self._do_update_deno, args=(deno,), daemon=True).start()
+
+    def _do_update_deno(self, deno):
+        try:
+            out = subprocess.run(
+                [deno, "upgrade"], capture_output=True, text=True, timeout=300,
+                env=download_env(),
+                **NO_WINDOW_KWARGS
+            )
+            output = strip_ansi(((out.stdout or "") + (out.stderr or "")).strip())
+            ok = out.returncode == 0
+        except subprocess.TimeoutExpired:
+            self.ui_queue.put(("deno_update_result", False, "Deno: la actualización tardó demasiado."))
+            return
+        except Exception as e:
+            self.ui_queue.put(("deno_update_result", False, f"Deno: no se pudo actualizar ({e})"))
+            return
+
+        if ok:
+            self.ui_queue.put(("deno_update_result", True, f"Deno actualizado. {output}"))
+        else:
+            self.ui_queue.put((
+                "deno_update_result", False,
+                f"Deno: la actualización falló.\n\n{output}",
+            ))
 
 
 def main():
